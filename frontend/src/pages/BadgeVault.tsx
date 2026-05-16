@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { entriesAPI } from '../utils/api';
+import { entriesAPI, getCertificateUrl } from '../utils/api';
 import { LearningEntry } from '../types';
 import { X, Search, Filter, Award, Maximize2, ExternalLink, AlertCircle, RefreshCcw } from 'lucide-react';
 
@@ -55,7 +55,7 @@ export default function BadgeVault() {
   };
 
   const openPreview = (certificatePath: string) => {
-    const url = `${import.meta.env.VITE_API_URL || 'http://localhost:3001'}${certificatePath}`;
+    const url = getCertificateUrl(certificatePath);
     setPreviewImage(url);
   };
 
@@ -147,7 +147,7 @@ export default function BadgeVault() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
           {entries.map((entry) => {
             const certificateUrl = entry.certificatePath
-              ? `${import.meta.env.VITE_API_URL || 'http://localhost:3001'}${entry.certificatePath}`
+              ? getCertificateUrl(entry.certificatePath)
               : null;
 
             if (!certificateUrl) return null;

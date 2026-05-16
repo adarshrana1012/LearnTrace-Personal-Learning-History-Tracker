@@ -33,6 +33,7 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/prisma ./prisma
 COPY package.json ./
+COPY start.js ./
 
 # Give appuser ownership of everything so Prisma can write
 # its query-engine cache files into node_modules/@prisma/engines
@@ -49,5 +50,5 @@ EXPOSE 3001
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
   CMD wget -qO- http://localhost:3001/health || exit 1
 
-# Run migrations then start
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/index.js"]
+# Run node startup script to robustly orchestrate database pushes
+CMD ["node", "start.js"]

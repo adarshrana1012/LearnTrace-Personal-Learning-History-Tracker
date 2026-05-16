@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
-import { entriesAPI } from '../utils/api';
+import { entriesAPI, getCertificateUrl } from '../utils/api';
 import { TagInput } from '../components/TagInput';
 import { X, UploadCloud, FileText, Calendar, Globe, Sparkles } from 'lucide-react';
 
@@ -40,12 +40,15 @@ export default function AddEntry() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [isDragging, setIsDragging] = useState(false);
+  const [extracting, setExtracting] = useState(false);
+  const [extractionMessage, setExtractionMessage] = useState('');
 
   const {
     register,
     handleSubmit,
     formState: { errors },
     setValue,
+    getValues,
   } = useForm<FormData>();
 
   useEffect(() => {
@@ -68,7 +71,7 @@ export default function AddEntry() {
       setValue('reflection', entry.reflection || '');
       setSkills(entry.skills || []);
       if (entry.certificatePath) {
-        setCertificatePreview(`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}${entry.certificatePath}`);
+        setCertificatePreview(getCertificateUrl(entry.certificatePath));
       }
     } catch (err) {
       console.error('Failed to load entry', err);
@@ -76,7 +79,7 @@ export default function AddEntry() {
     }
   };
 
-  const processFile = (file: File) => {
+  const processFile = async (file: File) => {
     const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
     if (!allowedTypes.includes(file.type)) {
       setError('Please select an image (PNG, JPG, WebP) or PDF file');
@@ -89,8 +92,45 @@ export default function AddEntry() {
         setCertificatePreview(reader.result as string);
       };
       reader.readAsDataURL(file);
+
+      // Auto-extraction (images only) — best effort, never overwrites existing data
+      try {
+        setExtracting(true);
+        setExtractionMessage('Analyzing certificate...');
+        const result = await entriesAPI.extractCertificate(file);
+        if (result?.extracted) {
+          const e = result.extracted;
+          const currentValues = getValues();
+
+          // Only autofill fields that are currently empty
+          if (e.title && !currentValues.title?.trim()) setValue('title', e.title, { shouldValidate: true, shouldDirty: true });
+          if (e.platform && !currentValues.platform?.trim()) setValue('platform', e.platform, { shouldValidate: true, shouldDirty: true });
+          if (e.domain && !currentValues.domain?.trim()) setValue('domain', e.domain, { shouldValidate: true, shouldDirty: true });
+          if (e.description && !currentValues.description?.trim()) setValue('description', e.description, { shouldValidate: true, shouldDirty: true });
+          if (e.reflection && !currentValues.reflection?.trim()) setValue('reflection', e.reflection, { shouldValidate: true, shouldDirty: true });
+
+          // Only add skills that don't already exist
+          if (e.skills && e.skills.length > 0) {
+            setSkills(prev => {
+              const existing = new Set(prev.map(s => s.toLowerCase()));
+              const newSkills = e.skills!.filter((s: string) => !existing.has(s.toLowerCase()));
+              return prev.length === 0 ? e.skills! : [...prev, ...newSkills];
+            });
+          }
+
+          setExtractionMessage('✓ Details auto-filled from certificate');
+          setTimeout(() => setExtractionMessage(''), 4000);
+        } else {
+          setExtractionMessage('');
+        }
+      } catch {
+        // Silently ignore extraction failures
+        setExtractionMessage('');
+      } finally {
+        setExtracting(false);
+      }
     } else {
-      // PDF — show a placeholder
+      // PDF — show a placeholder, no extraction
       setCertificatePreview('pdf');
     }
     setError('');
@@ -349,6 +389,16 @@ export default function AddEntry() {
                         </>
                     )}
                 </div>
+                {extracting && (
+                  <p className="text-xs text-amber-600 font-medium mt-2 animate-pulse">
+                    🔍 Analyzing certificate...
+                  </p>
+                )}
+                {!extracting && extractionMessage && (
+                  <p className="text-xs text-emerald-600 font-medium mt-2">
+                    {extractionMessage}
+                  </p>
+                )}
             </section>
 
             <div className="sticky top-8 space-y-4">

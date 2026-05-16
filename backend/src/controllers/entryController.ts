@@ -8,12 +8,7 @@ import { v2 as cloudinary } from 'cloudinary';
 import prisma from '../lib/prisma';
 import fs from 'fs';
 import path from 'path';
-
-// Ensure the uploads directory exists before processing any file upload
-const certDir = path.join(__dirname, '../../uploads/certificates');
-if (!fs.existsSync(certDir)) {
-  fs.mkdirSync(certDir, { recursive: true });
-}
+import { uploadToCloudinary } from '../utils/upload';
 
 export const createEntry = [
   body('title').trim().notEmpty().withMessage('Title is required'),
@@ -49,6 +44,15 @@ export const createEntry = [
 
       const hoursSpent = req.body.hoursSpent ? parseInt(req.body.hoursSpent, 10) : undefined;
       
+      // Handle certificate upload
+      let certificatePath: string | undefined;
+      if (req.file) {
+        logger.info({ filename: req.file.filename, path: req.file.path, mimetype: req.file.mimetype }, '📎 Certificate file received');
+        // Try Cloudinary first, fall back to local path
+        const cloudUrl = await uploadToCloudinary(req.file.path, userId);
+        certificatePath = cloudUrl || `/uploads/certificates/${path.basename(req.file.path)}`;
+      }
+
       const data = {
         title: req.body.title,
         platform: req.body.platform,
@@ -64,7 +68,7 @@ export const createEntry = [
         difficulty: req.body.difficulty || undefined,
         rating: req.body.rating ? parseInt(req.body.rating, 10) : undefined,
         resourceUrl: req.body.resourceUrl || undefined,
-        certificatePath: req.file ? `/uploads/certificates/${path.basename(req.file.path)}` : undefined
+        certificatePath,
       };
 
       const idempotencyKey = req.headers['idempotency-key'] as string;
@@ -152,7 +156,7 @@ export const updateEntry = [
   body('startDate').optional().isISO8601(),
   body('completionDate').optional().isISO8601(),
   body('hoursSpent').optional().isInt({ min: 0, max: 10000 }).withMessage('Hours spent must be a positive number'),
-  body('skills').optional().isArray(),
+  body('skills').optional(), // parsed manually below as JSON string from FormData
   
   async (req: AuthRequest, res: Response) => {
     try {
@@ -194,7 +198,9 @@ export const updateEntry = [
       if (req.body.resourceUrl !== undefined) data.resourceUrl = req.body.resourceUrl || undefined;
       
       if (req.file) {
-        data.certificatePath = `/uploads/certificates/${path.basename(req.file.path)}`;
+        logger.info({ filename: req.file.filename, path: req.file.path, mimetype: req.file.mimetype }, '📎 Certificate file received (update)');
+        const cloudUrl = await uploadToCloudinary(req.file.path, userId);
+        data.certificatePath = cloudUrl || `/uploads/certificates/${path.basename(req.file.path)}`;
         
         // If req.file exists AND existing entry has a certificatePath, delete the old file
         if (existingEntry?.certificatePath) {
@@ -238,3 +244,79 @@ export const deleteEntry = asyncHandler(async (req: AuthRequest, res: Response) 
   res.status(204).send();
 });
 
+// ── Certificate Auto-Extraction ───────────────────────────────────────────────
+export const extractCertificateData = [
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    // Only process images — PDFs are too complex for vision extraction
+    const isImage = req.file.mimetype.startsWith('image/');
+    if (!isImage) {
+      try { fs.unlinkSync(req.file.path); } catch {}
+      return res.json({ extracted: null, reason: 'PDF files are not supported for auto-extraction' });
+    }
+
+    try {
+      // Convert image to base64 for Groq Vision
+      const imageBuffer = fs.readFileSync(req.file.path);
+      const base64Image = imageBuffer.toString('base64');
+      const mimeType = req.file.mimetype;
+
+      const Groq = (await import('groq-sdk')).default;
+      const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+
+      const completion = await groq.chat.completions.create({
+        model: 'meta-llama/llama-4-scout-17b-16e-instruct',
+        max_tokens: 1024,
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'image_url',
+                image_url: {
+                  url: `data:${mimeType};base64,${base64Image}`,
+                },
+              },
+              {
+                type: 'text',
+                text: `You are analyzing a learning certificate or course completion document.
+Extract the following information from this certificate image and return ONLY a valid JSON object with no markdown, no explanation, no extra text:
+{
+  "title": "Full name of the course or certification",
+  "platform": "Name of the issuing platform or organization (e.g. Coursera, Udemy, Google, Microsoft)",
+  "description": "A detailed 1-2 paragraph description of what was learned based on the certificate text and title.",
+  "reflection": "A thoughtful 2-3 sentence reflection on the importance of this certification, key takeaways, and how these skills can be applied practically.",
+  "skills": ["skill1", "skill2", "skill3", "skill4", "skill5"],
+  "domain": "One of: Programming, Data Science, Design, Business, Marketing, Language, Science, Engineering, Art, Other"
+}
+If you cannot determine a field, infer a reasonable professional description/reflection based on the course title. Use null for strings and [] for arrays if completely unknown. Never guess the title or platform — only extract what is clearly visible.`,
+              },
+            ],
+          },
+        ],
+      });
+
+      const content = completion.choices[0]?.message?.content || '{}';
+
+      let extracted: any = {};
+      try {
+        const cleaned = content.replace(/```json|```/g, '').trim();
+        extracted = JSON.parse(cleaned);
+      } catch {
+        extracted = null;
+      }
+
+      // Clean up temp file
+      try { fs.unlinkSync(req.file.path); } catch {}
+
+      return res.json({ extracted });
+    } catch (error: any) {
+      try { if (req.file?.path) fs.unlinkSync(req.file.path); } catch {}
+      logger.error({ error: error.message }, '⚠️ Certificate extraction failed');
+      return res.json({ extracted: null, reason: 'Extraction failed' });
+    }
+  }),
+];
