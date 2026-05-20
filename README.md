@@ -1,4 +1,4 @@
-# 👥 Contributors
+# Contributors
 
 This project was collaboratively developed by:
 
@@ -13,7 +13,7 @@ A comprehensive personal learning history and institutional tracking platform de
 
 ---
 
-## 🚀 Key Features
+##  Key Features
 
 - **Multi-Role Authentication**  
   JWT-based secure authentication with OTP email verification (via SendGrid). Distinct roles supported:
@@ -67,7 +67,7 @@ A comprehensive personal learning history and institutional tracking platform de
 
 ---
 
-## 📋 Prerequisites
+##  Prerequisites
 
 Before you begin, ensure the following are installed:
 
@@ -79,9 +79,9 @@ Before you begin, ensure the following are installed:
 
 ---
 
-# 🛠️ Setup Instructions
+#  Setup Instructions
 
-## 1️⃣ Clone Repository
+##  Clone Repository
 
 ```bash
 git clone https://github.com/your-username/LearnTrace.git
@@ -90,7 +90,7 @@ cd LearnTrace
 
 ---
 
-## 2️⃣ Install Dependencies
+## Install Dependencies
 
 ### Backend
 
@@ -108,7 +108,7 @@ npm install
 
 ---
 
-## 3️⃣ Database Setup
+## Database Setup
 
 Create PostgreSQL database:
 
@@ -118,7 +118,7 @@ CREATE DATABASE learntrace;
 
 ---
 
-## 4️⃣ Configure Environment Variables
+##  Configure Environment Variables
 
 Move to backend directory:
 
@@ -156,7 +156,7 @@ EMAIL_FROM="your-email@example.com"
 
 ---
 
-## 5️⃣ Prisma Setup
+##  Prisma Setup
 
 ```bash
 npx prisma generate
@@ -165,7 +165,7 @@ npx prisma migrate dev
 
 ---
 
-# ▶️ Running the Application
+#  Running the Application
 
 ## Terminal 1 — Backend
 
@@ -197,7 +197,7 @@ http://localhost:5173
 
 ---
 
-# 🌐 Access Application
+#  Access Application
 
 Open browser and visit:
 
@@ -235,7 +235,7 @@ learntrace/
 
 ---
 
-# 🔑 Main API Endpoints
+# Main API Endpoints
 
 ## Authentication & Users
 
@@ -267,7 +267,7 @@ learntrace/
 
 ---
 
-# 🎨 Design System
+#  Design System
 
 The platform uses a modern and interactive UI system featuring:
 
@@ -290,7 +290,7 @@ The platform uses a modern and interactive UI system featuring:
 
 ---
 
-# 📝 General Notes
+# General Notes
 
 - All media uploads are securely stored on Cloudinary.
 - Raw PDF files are stored using:
@@ -302,6 +302,6 @@ The platform uses a modern and interactive UI system featuring:
 
 ---
 
-# 📄 License
+#  License
 
 Built as an advanced, production-quality educational technology system.
