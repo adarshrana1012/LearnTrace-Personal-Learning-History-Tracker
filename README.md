@@ -4,6 +4,7 @@ This project was collaboratively developed by:
 
 - Adarsh Rana
 - Abindas P
+- Arjun Choudhary 
 
 ---
 
